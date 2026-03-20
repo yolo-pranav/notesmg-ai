@@ -9,18 +9,6 @@ import {
 
 const router = Router();
 
-// Used for normalization since Prisma already maps snake_case correctly via schema
-function mapNote(note) {
-  return {
-    id: Number(note.id),
-    title: note.title,
-    content: note.content || "",
-    createdAt: note.createdAt,
-    updatedAt: note.updatedAt,
-    userId: Number(note.userId)
-  };
-}
-
 router.use(requireAuth);
 
 router.get("/", async (req, res, next) => {
@@ -30,7 +18,7 @@ router.get("/", async (req, res, next) => {
       orderBy: { createdAt: 'asc' }
     });
 
-    res.json(notes.map(mapNote));
+    res.json(notes);
   } catch (error) {
     next(error);
   }
@@ -49,8 +37,7 @@ router.get("/search", async (req, res, next) => {
       orderBy: { createdAt: 'asc' }
     });
 
-    const notes = notesResult.map(mapNote);
-    res.json(await searchNotes(query, notes));
+    res.json(await searchNotes(query, notesResult));
   } catch (error) {
     next(error);
   }
@@ -70,7 +57,7 @@ router.get("/:id", async (req, res, next) => {
       return;
     }
 
-    res.json(mapNote(note));
+    res.json(note);
   } catch (error) {
     next(error);
   }
@@ -94,9 +81,8 @@ router.post("/", async (req, res, next) => {
       }
     });
 
-    const note = mapNote(newNote);
-    await generateAndStoreEmbedding(note);
-    res.status(201).json(note);
+    await generateAndStoreEmbedding(newNote);
+    res.status(201).json(newNote);
   } catch (error) {
     next(error);
   }
@@ -130,14 +116,12 @@ router.put("/:id", async (req, res, next) => {
       return;
     }
 
-    // Fetch the updated note
     const updatedNote = await prisma.note.findFirst({
       where: { id: Number(req.params.id) }
     });
 
-    const note = mapNote(updatedNote);
-    await generateAndStoreEmbedding(note);
-    res.json(note);
+    await generateAndStoreEmbedding(updatedNote);
+    res.json(updatedNote);
   } catch (error) {
     next(error);
   }

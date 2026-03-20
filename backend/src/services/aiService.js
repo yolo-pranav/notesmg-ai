@@ -17,17 +17,12 @@ function cosineSimilarity(vectorA, vectorB) {
   }
 
   let dotProduct = 0;
-  let normA = 0;
-  let normB = 0;
 
   for (let index = 0; index < vectorA.length; index += 1) {
     dotProduct += vectorA[index] * vectorB[index];
-    normA += vectorA[index] ** 2;
-    normB += vectorB[index] ** 2;
   }
 
-  const denominator = Math.sqrt(normA) * Math.sqrt(normB);
-  return denominator === 0 ? 0 : dotProduct / denominator;
+  return dotProduct;
 }
 
 async function fetchEmbedding(text) {
@@ -78,40 +73,52 @@ export async function searchNotes(query, notes) {
   const queryVector = await fetchEmbedding(query);
 
   const scoredNotes = notes.map((note) => {
-    let score = 0;
+    let semanticScore = 0;
     
     if (queryVector.length > 0 && vectorIndex.has(Number(note.id))) {
       const noteVector = vectorIndex.get(Number(note.id));
-      score = cosineSimilarity(queryVector, noteVector);
+      semanticScore = cosineSimilarity(queryVector, noteVector);
     }
     
-    // Exact word matching massive boosts
-    const titleMatch = note.title.toLowerCase().includes(normalizedQuery);
-    const contentMatch = note.content && note.content.toLowerCase().includes(normalizedQuery);
+    let keywordScore = 0;
     
-    if (titleMatch) {
-      score += 0.5; // Exact title match is highly relevant
-    } else if (contentMatch) {
-      score += 0.3; // Content wording match is moderately relevant
+    // Only apply keyword bumps if query is meaningful (>= 3 chars) to avoid 
+    // short/single-letter searches artificially boosting totally irrelevant notes
+    if (normalizedQuery.length >= 3) {
+      const lowerTitle = note.title.toLowerCase();
+      const lowerContent = (note.content || "").toLowerCase();
+      
+      if (lowerTitle.includes(normalizedQuery)) {
+        keywordScore += 0.5; // Exact title substring match is highly relevant
+      } else if (lowerContent.includes(normalizedQuery)) {
+        keywordScore += 0.25; // Content wording substring match is moderately relevant
+      }
     }
 
-    return { note, score };
+    return { 
+      note, 
+      score: semanticScore + keywordScore,
+      semanticScore 
+    };
   });
 
   const processedNotes = scoredNotes
-    // Strictly threshold (prevent irrelevant nonsense results)
-    .filter((entry) => entry.score >= 0.25)
-    // Primary sorting: Highest Score First (Most Relevant -> Least Relevant)
+    // STRICT THRESHOLD:
+    // Models like all-MiniLM-L6-v2 often assign 0.15-0.25 scores to completely 
+    // unrelated texts. Raising this to 0.40 guarantees we only present items 
+    // with strong semantic ties OR a definitive exact text match bypass.
+    .filter((entry) => entry.score >= 0.40)
+    // Primary sorting: Highest aggregate score first
     .sort((a, b) => b.score - a.score)
     .slice(0, 10); // Limit to top 10 best matches
 
-  // Log results title and score in backend console
+  // Log results title and score in backend console to help dev debugging
   console.log(`\n--- AI Search Results for: "${query}" ---`);
   if (processedNotes.length === 0) {
     console.log("No relevant notes found.");
   } else {
     processedNotes.forEach((entry, idx) => {
-      console.log(`[#${idx + 1}] Score: ${entry.score.toFixed(4)} | Title: "${entry.note.title}"`);
+      console.log(`[#${idx + 1}] Score: ${entry.score.toFixed(4)} (Semantic: ${entry.semanticScore.toFixed(4)}) | Title: "${entry.note.title}"`);
     });
   }
 

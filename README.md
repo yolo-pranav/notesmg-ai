@@ -76,6 +76,19 @@ If you prefer to run the services bare-metal:
 
 ---
 
+## AI Search & Scoring Logic
+
+The search endpoint (`/api/notes/search`) uses a robust hybrid scoring approach to retrieve notes, combining local AI embeddings with algorithmic keyword matching to guarantee relevancy:
+
+1. **Semantic Context Scoring**: 
+   The local `@xenova/transformers` pipeline generates pre-normalized unit vectors for each note when it is created. When you search, the AI generates a multi-dimensional vector from your search string. A pure dot-product computation (Cosine Similarity) is calculated to determine the conceptual semantic link between the two.
+2. **Keyword Augmentation bypass**: 
+   If a query is deemed meaningful (≥ 3 characters), the algorithm parses exact-text overlaps. Substring matches directly inside a note's Title inject a `+0.5` highly relevant score bonus, while matches inside the body Content provide a `+0.25` bonus. Single-letter text anomalies are bypassed to prevent substring-match spam.
+3. **Strict Inclusion Threshold**: 
+   Because smaller transformer models (`all-MiniLM-L6-v2`) frequently attribute minor baseline similarities (`~0.15 - 0.25`) to unrelated sentences due to matching grammar or stop words, the engine completely discards any resulting score **below `0.40`**. This threshold mathematically guarantees that unless a note has a definitive conceptual link OR a direct keyword bypass, it is not presented to the user.
+
+---
+
 ## Assumptions Made During Development
 
 - **Local AI Execution**: To avoid API rate limits, privacy concerns, and external network latency, the app assumes running the embeddings locally using `@xenova/transformers` is better than relying on remote APIs (like HuggingFace or OpenAI). The initial load might be slightly slower while the model downloads, but subsequent searches are completely offline and private.
