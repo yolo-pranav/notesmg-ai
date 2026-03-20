@@ -1,7 +1,7 @@
 services:
   db:
     image: postgres:15-alpine
-    container_name: notesmg_container
+    container_name: notesmg_db
     restart: always
     environment:
       POSTGRES_DB: notesmg
@@ -11,37 +11,38 @@ services:
       - "5433:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
-    networks:
-      - notes_network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   backend:
     build: ./backend
+    container_name: notesmg_backend
     ports:
       - "8080:8080"
     environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres
       - DB_PASSWORD=123
-      - DATABASE_URL=postgresql://postgres:123@localhost:5432/notesmg
+      - DB_NAME=notesmg
+      - DATABASE_URL=postgresql://postgres:123@db:5432/notesmg
     depends_on:
-      - db
-    networks:
-      - notes_network
+      db:
+        condition: service_healthy
 
   frontend:
     build:
       context: ./frontend
       args:
-        - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8080/api}
+        - VITE_API_BASE_URL=http://localhost:8080/api
+    container_name: notesmg_frontend
     ports:
-      - "3000:80"
+      - "3000:3000"
     depends_on:
       - backend
-    networks:
-      - notes_network
 
 volumes:
   db_data:
-
-
-networks:
-  notes_network:
-    driver: bridge
