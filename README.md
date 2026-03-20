@@ -40,9 +40,13 @@ The easiest way to get the project running is via Docker Compose. This ensures a
 ### Running with Docker (Recommended)
 
 1. **Clone the repository** (if not already done) and open a terminal in the root folder.
-2. **Start the containers**:
+2. **Create the shared Docker network**:
    ```bash
-   docker compose up --build
+   docker network create notes_network
+   ```
+3. **Start the containers**:
+   ```bash
+   docker compose up
    ```
    *Note: If you run into database authentication issues (`P1000: Authentication failed`), or if you have old conflicting Docker volumes, run `docker compose down -v` to reset your volumes before running the build command.*
 
